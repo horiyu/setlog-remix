@@ -13,7 +13,8 @@ GET  /video/<job>                       the rendered mp4 of a held job
 POST /send     ?job=&room=&caption=[&dry=1]   post a held job
 GET  /health   "ok"
 Every call but /health needs the token (?token= or an X-Token header). format may be
-the format's id or its label from /formats. worker.sh renders and posts (post.sh).
+the format's id or its label from /formats. worker.sh renders and hands the video to
+setlog-post (SETLOG_POST in settings.conf), which posts it.
 Runs under systemd socket activation and quits after IDLE_SECONDS without a request.
 """
 import datetime, email, email.policy, json, os, re, shutil, socket, subprocess, sys, time
@@ -42,12 +43,19 @@ def log(msg):
         fh.write(f"{datetime.datetime.now():%F %T} {msg}\n")
 
 
+def setlog_post():
+    return os.path.expanduser(conf().get("SETLOG_POST", "~/dev/setlog-post/setlog-post"))
+
+
 def rooms():
-    """The rooms one can post to (rooms/<name>.png), DEFAULT_ROOM first."""
-    default = conf().get("DEFAULT_ROOM", "vlog") or "vlog"
-    d = os.path.join(HOME, "rooms")
-    names = sorted(f[:-4] for f in os.listdir(d) if f.endswith(".png")) if os.path.isdir(d) else []
-    return default, [default] * (default in names) + [n for n in names if n != default]
+    """(default, rooms) as setlog-post knows them: the rooms it can tick, default first."""
+    try:
+        r = subprocess.run([setlog_post(), "rooms"], capture_output=True, text=True, timeout=20)
+        d = json.loads(r.stdout)
+        return d["default"], d["rooms"]
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
+        log(f"setlog-post rooms failed: {e}")
+        raise repo.RepoError("PC の setlog-post が見つかりません（settings.conf の SETLOG_POST）") from None
 
 
 def pick_format(repo_spec, wanted):
@@ -194,6 +202,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.fail(400, ext)
             spec = q.get("repo") or conf().get("DEFAULT_REPO", "horiyu/setlog-formats")
             sha, fmt = pick_format(spec, q.get("format") or "plain")
+            chosen = self.rooms(q) if path == "/log" else []
         except repo.RepoError as e:
             return self.fail(400, str(e))
         job = new_job(HELD if path == "/preview" else QUEUE)
@@ -201,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
         with open(os.path.join(d, "input." + ext), "wb") as fh:
             fh.write(video)
         meta = {"repo": spec, "sha": sha, "format": fmt["id"], "format_name": fmt["name"],
-                "caption": q.get("caption", ""), "rooms": self.rooms(q), "dry": q.get("dry") == "1",
+                "caption": q.get("caption", ""), "rooms": chosen, "dry": q.get("dry") == "1",
                 "received": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}
         write_job(d, meta)
         log(f"  job {job}: {fmt['id']} from {spec}@{sha[:7]}, rooms={meta['rooms']}, caption={meta['caption']!r}")
@@ -226,7 +235,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def rooms(self, q):
         names = [r.strip() for r in re.split(r"[,\n]", q.get("room", "")) if r.strip()]
-        return names or [rooms()[0]]
+        default, known = rooms()
+        unknown = [n for n in names if n not in known]
+        if unknown:
+            raise repo.RepoError(f"ルーム {', '.join(unknown)} は登録されていません")
+        return names or [default]
 
     def send_held(self, q):
         job = q.get("job", "")

@@ -12,12 +12,6 @@ if [ ! -s state/token ]; then
   echo "made a new Shortcut token in state/token"
 fi
 
-# The receiver runs under systemd, which may not know your desktop's DISPLAY: pin it.
-if [ -n "${DISPLAY:-}" ] && grep -q '^DISPLAY_ID= ' settings.conf; then
-  sed -i "s|^DISPLAY_ID= |DISPLAY_ID=$DISPLAY |" settings.conf
-  echo "settings.conf: DISPLAY_ID=$DISPLAY"
-fi
-
 unit=~/.config/systemd/user
 mkdir -p "$unit"
 sed -e "s|__PORT__|$PORT|" systemd/setlog-remix.socket > "$unit/setlog-remix.socket"

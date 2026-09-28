@@ -5,14 +5,3 @@ __pycache__/
 /held/
 /done/
 /cache/
-
-# The setlog app itself: pulled from a device you own, never redistributed here
-/apk/
-# Android SDK, JDK (symlinks or copies) and the AVD, which holds your login
-/jdk
-/sdk
-/avd/
-# a local python-xlib copy
-/vendor/
-# Room avatars: screenshots of your own rooms and their members (rooms/README.md)
-/rooms/*.png
