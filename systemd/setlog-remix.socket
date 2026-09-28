@@ -1,0 +1,8 @@
+[Unit]
+Description=setlog-remix: receive videos from the iPhone and render them in a format
+
+[Socket]
+ListenStream=127.0.0.1:8091
+
+[Install]
+WantedBy=sockets.target

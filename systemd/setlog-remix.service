@@ -1,0 +1,8 @@
+[Unit]
+Description=setlog-remix receiver (socket-activated, exits when idle)
+
+[Service]
+ExecStart=%h/dev/setlog-remix/server.py
+WorkingDirectory=%h/dev/setlog-remix
+Environment=PYTHONUNBUFFERED=1
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
