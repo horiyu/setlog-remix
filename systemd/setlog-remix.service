@@ -2,7 +2,7 @@
 Description=setlog-remix receiver (socket-activated, exits when idle)
 
 [Service]
-ExecStart=%h/dev/setlog-remix/server.py
-WorkingDirectory=%h/dev/setlog-remix
+ExecStart=/usr/bin/python3 __DIR__/server.py
+WorkingDirectory=__DIR__
 Environment=PYTHONUNBUFFERED=1
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin

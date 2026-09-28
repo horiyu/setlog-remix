@@ -1,7 +1,14 @@
 # setlog-remix settings. Copied to settings.conf on first run: edit that copy.
 DEFAULT_REPO=horiyu/setlog-formats   # formats repository when the Shortcut names none (owner/name[@ref])
-ALLOWED_REPOS=                       # space-separated owner/name or owner/*; empty = any repository
-GITHUB_TOKEN=                        # for private repositories / more API calls; empty = try `gh auth token`
-SCREEN_RECORD=~/dev/setlog-screen-record   # the setlog-screen-record checkout that does the posting
-PORT=8091                            # local port the receiver listens on (tailscale serve fronts it)
-IDLE_SECONDS=600                     # the receiver exits after this long without a request
+ALLOWED_REPOS=             # space-separated owner/name or owner/*; empty = any repository
+GITHUB_TOKEN=              # for private repositories / more API calls; empty = try `gh auth token`
+AVD=me                     # the emulator signed in to your own setlog account (bin/make-avd.sh me)
+DEFAULT_ROOM=vlog          # room to send to when the request names none (name as shown on the send screen)
+LEAD=5                     # seconds the first frame is held while setlog opens the camera
+PORT=8091                  # local port the receiver listens on (tailscale serve fronts it)
+HTTPS_PORT=8451            # tailnet port for `tailscale serve` (bin/install-service.sh)
+IDLE_SECONDS=600           # the receiver exits after this long without a request (systemd starts it again)
+DISPLAY_ID=                # X display for the emulator window and the clipboard (empty = $DISPLAY, else :0)
+# Other programs on this PC that drive an emulator and hold a lock file while they do.
+# Posting waits for each of them. Space-separated paths; leave empty if none.
+EXTRA_LOCKS=

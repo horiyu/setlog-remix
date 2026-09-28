@@ -9,7 +9,7 @@ directory under plain names, so nothing from the repository is ever spliced
 into the ffmpeg command as a path.
 
 The output is what the emulator camera shows in setlog's frame: 1710x962
-(the 16:9 band setlog keeps, see setlog-screen-record/frame.sh), 30 fps, no
+(the 16:9 band setlog keeps of the camera's 1710x1280 frame, see post.sh), 30 fps, no
 sound, a few seconds long. setlog keeps a little over 2 s of it.
 
     render.py check  <format dir>...

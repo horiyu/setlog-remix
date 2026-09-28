@@ -13,8 +13,7 @@ GET  /video/<job>                       the rendered mp4 of a held job
 POST /send     ?job=&room=&caption=[&dry=1]   post a held job
 GET  /health   "ok"
 Every call but /health needs the token (?token= or an X-Token header). format may be
-the format's id or its label from /formats. Posting is done by setlog-screen-record
-(SCREEN_RECORD in settings.conf): the rendered video goes into its queue.
+the format's id or its label from /formats. worker.sh renders and posts (post.sh).
 Runs under systemd socket activation and quits after IDLE_SECONDS without a request.
 """
 import datetime, email, email.policy, json, os, re, shutil, socket, subprocess, sys, time
@@ -28,10 +27,6 @@ import render, repo  # noqa: E402
 QUEUE, HELD, STATE = (os.path.join(HOME, d) for d in ("queue", "held", "state"))
 MAX_BYTES = 400 * 1024 * 1024
 conf = repo.conf
-
-
-def screen_record():
-    return os.path.expanduser(conf().get("SCREEN_RECORD", "~/dev/setlog-screen-record"))
 
 
 def token():
@@ -48,16 +43,9 @@ def log(msg):
 
 
 def rooms():
-    """setlog-screen-record's rooms (rooms/<name>.png), its DEFAULT_ROOM first."""
-    sr = screen_record()
-    default = "vlog"
-    for path in (os.path.join(sr, "settings.conf"), os.path.join(sr, "settings.conf.example")):
-        if os.path.exists(path):
-            with open(path, encoding="utf-8") as fh:
-                m = re.search(r"^DEFAULT_ROOM=\"?([^\"#\n]*?)\"?\s*(#|$)", fh.read(), re.M)
-            default = (m.group(1).strip() if m else "") or default
-            break
-    d = os.path.join(sr, "rooms")
+    """The rooms one can post to (rooms/<name>.png), DEFAULT_ROOM first."""
+    default = conf().get("DEFAULT_ROOM", "vlog") or "vlog"
+    d = os.path.join(HOME, "rooms")
     names = sorted(f[:-4] for f in os.listdir(d) if f.endswith(".png")) if os.path.isdir(d) else []
     return default, [default] * (default in names) + [n for n in names if n != default]
 

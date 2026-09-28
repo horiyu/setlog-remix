@@ -10,21 +10,22 @@ iOS のショートカットで動画を撮り、GitHub に置いた**フォー�
 
 *Shoot a video with an iOS Shortcut, pick a format from a GitHub repository, and post it to setlog. A format is
 a JSON file (clip, framing, effects) published in a repository; the Shortcut names the repository, lists its
-formats, and this PC renders the video in the one you pick and hands it to
-[setlog-screen-record](https://github.com/horiyu/setlog-screen-record) to post.*
+formats, and this PC renders the video in the one you pick. setlog only takes what its camera sees, so an
+Android emulator on the PC, signed in to your account, plays the result into its camera and posts it.*
 
 ```
 iPhone ─ビデオを撮影─▶ GET /formats?repo=owner/name ─▶ 一覧から選ぶ ─▶ POST /log（動画＋format＋一言＋ルーム）
                             │                                               │
                      GitHub から format.json を取得                 render.py が 1710x962 に描く
                      （コミットごとに cache/ に保存）                       │
-                                                         setlog-screen-record の queue へ → エミュレータで撮影・送信
+                                                         post.sh: エミュレータのカメラに流す → setlog で撮影
+                                                                  → 一言を貼る → ルームにチェック → 送信 → 電源オフ
 ```
 
 ## 使う前に（重要）
 
-- setlog の利用規約（第3条）は、運営会社の許可なく自動化プログラムを使うことを禁じている。投稿の部分は
-  setlog-screen-record がエミュレータを操作して行うので、**使う前に運営会社（New Chat）の許可を得ること**。
+- setlog の利用規約（第3条）は、運営会社の許可なく自動化プログラムを使うことを禁じている。この仕組みは
+  エミュレータ上の setlog の撮影・送信をスクリプトで操作するので、**使う前に運営会社（New Chat）の許可を得ること**。
   作者は自分の利用について許可を得ているが、それはあなたの利用を許可するものではない。
 - setlog は「その場で撮る」アプリ。加工した動画を送るのはアプリの趣旨から外れうるので、友人のいるルームに
   送るときは、そういう Log だと相手に伝えておくこと。
@@ -51,30 +52,39 @@ iPhone ─ビデオを撮影─▶ GET /formats?repo=owner/name ─▶ 一覧か
 | `server.py` | 受け口。systemd のソケット起動で必要なときだけ立ち上がり、無通信が続くと終わる（常駐しない） |
 | `repo.py` | GitHub からリポジトリを取ってくる（コミット単位で `cache/` に、直近 3 つ）。フォーマットの一覧 |
 | `render.py` | format.json を読んで ffmpeg で描く。`check` / `render` / `sheet` はフォーマット作者の手元確認用 |
-| `worker.sh` | キューを1件ずつ描き、setlog-screen-record の `queue/` に `recording.mp4`・`caption.txt`・`room.txt` を置いて、その worker を起こす |
-| `systemd/` | ユーザー単位の systemd ユニット（リポジトリが `~/dev/setlog-remix` にある前提） |
+| `worker.sh` / `post.sh` | キューを1件ずつ描いて投稿する。他のエミュレータ利用者とは `EXTRA_LOCKS` で排他 |
+| `find_room.py` / `rooms.py` | 送信画面でルームをアバター画像で探す（`rooms/<ルーム名>.png`、`bin/add-rooms.sh` で切り出す） |
+| `bin/` | SDK の用意、エミュレータの作成・起動・正しい電源オフ、ルームの登録、受け口の設置、点検（`doctor.sh`） |
+| `lib/clip.py` | 一言を X のクリップボード経由でエミュレータに渡す（日本語は `adb shell input text` を通らない） |
+| `systemd/` | ユーザー単位の systemd ユニットの雛形（`bin/install-service.sh` が入れる） |
 
-出来上がりは 1710x962（setlog が使う 16:9 の帯）なので、setlog-screen-record の `frame.sh` はそのまま等倍で嵌める。
-Log に残るのは頭から 2 秒ちょっと。
+エミュレータのカメラは 1710x1280 の枠を読み、setlog はその上端の 16:9 帯（1710x962）を使う。出来上がりはちょうど
+その帯の大きさなので、`post.sh` は上に置いて下を埋めるだけ。setlog がカメラを開いてから撮り始めるまでの約 5 秒は
+先頭フレームの静止（`LEAD`）で吸収するので、Log は出来上がりの 0 秒目から始まり、2 秒ちょっと残る。
 
 ## 必要なもの
 
-- [setlog-screen-record](https://github.com/horiyu/setlog-screen-record) がセットアップ済みで動くこと（エミュレータ、ルームのアバター画像など）
-- Python 3.10 以上と Pillow、`ffmpeg`、日本語フォント: `sudo apt install python3-pil ffmpeg fonts-noto-cjk`
+- Linux の PC（X のデスクトップと KVM）。Android SDK と JDK は `bin/setup-sdk.sh` が `sdk/` `jdk/` に入れる
+  （既にあるならシンボリックリンクでいい）
+- Python 3.10 以上と Pillow・python-xlib、`ffmpeg`、日本語フォント:
+  `sudo apt install python3-pil python3-xlib ffmpeg fonts-noto-cjk`
+- setlog（エミュレータの中で Google Play から、または自分の端末から抜いた APK を `apk/` に）
 - Tailscale（PC と iPhone が同じ tailnet）
 - private なフォーマット集を使うなら GitHub のトークン（`settings.conf` の `GITHUB_TOKEN`、なければ `gh auth token` を試す）
 
 ## セットアップ
 
 1. `settings.conf.example` を `settings.conf` にコピーして編集する（初回は自動でコピーされる）。
-   `SCREEN_RECORD` に setlog-screen-record の場所、`DEFAULT_REPO` にいつものフォーマット集。
-2. 合言葉を作る: `mkdir -p state && python3 -c "import secrets; print(secrets.token_urlsafe(24))" > state/token && chmod 600 state/token`
-3. 受け口を入れる:
-   ```sh
-   cp systemd/setlog-remix.* ~/.config/systemd/user/
-   systemctl --user daemon-reload && systemctl --user enable --now setlog-remix.socket
-   tailscale serve --bg --https=8451 http://127.0.0.1:8091
-   ```
+   `DEFAULT_REPO` にいつものフォーマット集。同じ PC で他にもエミュレータを動かすものがあれば、その
+   ロックファイルを `EXTRA_LOCKS` に（エミュレータは同時に1台しか動かせない）。
+2. `bin/setup-sdk.sh` → `bin/doctor.sh` で足りないものを確かめる。
+3. エミュレータを作って setlog を入れる: `bin/make-avd.sh`。開いた setlog に**スマホと同じ方法で**サインインし、
+   「Transfer from another device」を選んでスマホで承認し、暗号鍵を移す。既存のアカウントで
+   「Create a new encryption key」は押さないこと（古い Log が読めなくなりうる）。終わったら `bin/stop-emu.sh`。
+4. 送り先のルームを登録する: `bin/add-rooms.sh`（何も送らずに送信画面の行を切り出す）→
+   `state/rooms-new/sheet.png` を見て `bin/name-room.sh <番号> "<ルーム名>"`。
+5. 受け口を入れる: `bin/install-service.sh`。合言葉（`state/token`）を作り、systemd のソケットと
+   `tailscale serve --https=8451` を設定して、ショートカットに書く URL と合言葉を表示する。
 
 ## iOS ショートカット
 
@@ -124,7 +134,9 @@ python3 repo.py horiyu/setlog-formats                  # 一覧と、壊れた�
 tail state/server.log state/worker.log
 ```
 
-`dry=1` は setlog-screen-record に `dry` として渡り、送信画面でキャンセルする。
+`dry=1` のジョブは送信画面でキャンセルする（`DRY_RUN=1 ./post.sh done/<job>` でも同じ）。各段の画面は
+`state/last-send.png`（一言を貼った直後）、`state/last-room.png`（ルームを選んだ直後）、`state/last-sent.png`。
+投稿の記録は `state/posts.jsonl`。
 
 ## 作者・ライセンス
 
