@@ -1,0 +1,7 @@
+# setlog-remix settings. Copied to settings.conf on first run: edit that copy.
+DEFAULT_REPO=horiyu/setlog-formats   # formats repository when the Shortcut names none (owner/name[@ref])
+ALLOWED_REPOS=                       # space-separated owner/name or owner/*; empty = any repository
+GITHUB_TOKEN=                        # for private repositories / more API calls; empty = try `gh auth token`
+SCREEN_RECORD=~/dev/setlog-screen-record   # the setlog-screen-record checkout that does the posting
+PORT=8091                            # local port the receiver listens on (tailscale serve fronts it)
+IDLE_SECONDS=600                     # the receiver exits after this long without a request
