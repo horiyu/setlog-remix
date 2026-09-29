@@ -17,7 +17,7 @@ sound, a few seconds long. setlog keeps a little over 2 s of it.
     render.py sheet  <video> <out.png>        four frames side by side
     render.py job    <job dir>                what worker.sh runs
 """
-import datetime, json, math, os, re, shutil, subprocess, sys, tempfile
+import datetime, json, math, os, re, secrets, shutil, subprocess, sys, tempfile
 
 W, H, FPS = 1710, 962, 30
 SPEC = 1
@@ -134,19 +134,22 @@ def load(fmt_dir, root=None):
     for i, e in enumerate(effects):
         where = f"effects[{i}]"
         kind = e.get("type") if isinstance(e, dict) else None
-        if kind not in EFFECTS:
-            raise FormatError(f"{where}.type: {kind!r} is not one of {', '.join(EFFECTS)}")
+        if kind not in EFFECTS and kind not in FRAME_EFFECTS:
+            raise FormatError(f"{where}.type: {kind!r} is not one of {', '.join([*EFFECTS, *FRAME_EFFECTS])}")
         ep = Params(f"{where} ({kind})", e)
-        fmt["effects"].append((kind, EFFECTS[kind][0](ep, fmt)))
+        read = EFFECTS[kind][0] if kind in EFFECTS else FRAME_EFFECTS[kind]
+        fmt["effects"].append((kind, read(ep, fmt)))
         ep.done()
     p.done()
     fmt["spec"] = int(spec)
     return fmt
 
 
-def asset(p, key, kind, fmt, required=True):
+def asset(p, key, kind, fmt, required=True, name=None):
     """A file named by the format, resolved inside its repository."""
-    name = p.text(key, "", 200)
+    name = p.text(key, "", 200) if name is None else name
+    if not isinstance(name, str):
+        raise FormatError(f"{p.where}.{key}: must be a file name")
     if not name:
         if required:
             raise FormatError(f"{p.where}.{key}: name a file")
@@ -348,6 +351,18 @@ def b_image(s, ctx):
     return []
 
 
+def r_thermal(p, _):
+    return {"palette": p.choice("palette", "inferno", ("inferno", "magma", "plasma", "turbo", "heat", "fiery", "cool")),
+            "contrast": p.num("contrast", 1.3, 0.5, 3), "blur": p.num("blur", 2, 0, 10)}
+
+
+def b_thermal(s, _):
+    out = ["hue=s=0"]
+    if s["blur"]:
+        out.append(f"gblur=sigma={s['blur']:g}")
+    return out + [f"eq=contrast={s['contrast']:g}", "format=yuv444p", f"pseudocolor=p={s['palette']}"]
+
+
 EFFECTS = {
     "grade": (r_grade, b_grade),                                          # colour: brightness, contrast, ...
     "mono": (r_none, lambda s, _: ["hue=s=0"]),
@@ -367,7 +382,76 @@ EFFECTS = {
     "lut": (r_lut, b_lut),
     "text": (r_text, b_text),
     "image": (r_image, b_image),
+    "thermal": (r_thermal, b_thermal),
 }
+
+
+# --- frame effects (ar.py): read and checked here, drawn there ------------------------
+
+def rgb01(c):
+    return [v / 255 for v in rgba(c)[:3]]
+
+
+def r_particles(p, _):
+    kind = p.choice("kind", "snow", ("snow", "petals", "bubbles", "confetti"))
+    count, size, speed = {"snow": (160, 0.012, 0.35), "petals": (70, 0.018, 0.3),
+                          "bubbles": (36, 0.04, 0.25), "confetti": (140, 0.011, 0.6)}[kind]
+    return {"kind": kind, "count": p.num("count", count, 1, 400), "size": p.num("size", size, 0.002, 0.1),
+            "speed": p.num("speed", speed, 0, 3), "wind": p.num("wind", 0.03, -1, 1),
+            "opacity": p.num("opacity", 0.9, 0, 1), "depth": p.flag("depth", True), "seed": p.num("seed", 1, 0, 1e6)}
+
+
+def r_card(p, fmt, size):
+    s = {"text": p.text("text", "{caption}", 200), "size": p.num("size", size, 12, 200),
+         "appear": p.num("appear", 0.15, 0, 5), "uppercase": p.flag("uppercase", False)}
+    font = p._get("font", "sans-bold")
+    s["font"] = font if font in BUILTIN_FONTS else asset(p, "font", "font", fmt)
+    return s
+
+
+def r_pin(p, fmt):
+    s = r_card(p, fmt, 60)
+    s.update({"style": p.choice("style", "card", ("card", "neon")), "auto": p.flag("auto", True),
+              "x": p.num("x", 0.5, 0, 1),
+              "y": p.num("y", 0.62, 0, 1), "tilt": p.num("tilt", -4, -30, 30),
+              "behind_people": p.flag("behind_people", True)})
+    return s
+
+
+def r_speech(p, fmt):
+    return r_card(p, fmt, 52)
+
+
+def r_aura(p, _):
+    return {"width": p.num("width", 0.04, 0.005, 0.2), "strength": p.num("strength", 0.8, 0, 2),
+            "cycle": p.flag("cycle", True), "hue": p.num("hue", 0.55, 0, 1), "color": rgb01(p.color("color", "#7FD4FF"))}
+
+
+def r_background(p, fmt):
+    files = p._get("files", None)
+    if not isinstance(files, list) or not 1 <= len(files) <= 8:
+        raise FormatError(f"{p.where}.files: list 1 to 8 images")
+    return {"files": [asset(p, "files", "image", fmt, name=f) for f in files],
+            "choose": p.choice("choose", "random", ("random", "first")), "seed": 0,
+            "subject": p.choice("subject", "auto", ("auto", "person", "near")), "drift": p.num("drift", 0.06, 0, 0.3)}
+
+
+def r_glitch(p, _):
+    return {"amount": p.num("amount", 0.5, 0, 1), "rate": p.num("rate", 2, 0.2, 8), "seed": p.num("seed", 3, 0, 1e6)}
+
+
+def r_neon(p, _):
+    return {"thickness": p.num("thickness", 2, 1, 6), "glow": p.num("glow", 0.8, 0, 2), "dim": p.num("dim", 0.12, 0, 1),
+            "cycle": p.num("cycle", 0.35, 0, 3), "color": rgb01(p.color("color", "#FF4FD8"))}
+
+
+def r_trail(p, _):
+    return {"decay": p.num("decay", 0.9, 0.5, 0.99), "hue_shift": p.num("hue_shift", 0.6, 0, 3),
+            "strength": p.num("strength", 0.9, 0, 1)}
+
+
+FRAME_EFFECTS = {"particles": r_particles, "pin": r_pin, "speech": r_speech, "aura": r_aura,
+                 "background": r_background, "glitch": r_glitch, "neon": r_neon, "trail": r_trail}
 
 
 # --- text variables --------------------------------------------------------------
@@ -486,7 +570,8 @@ def plan(fmt, src, caption="", when_=None):
     return start, span, speed, d
 
 
-def build(fmt, src_path, out_path, work, caption="", when_=None):
+def prepare(fmt, src_path, caption="", when_=None):
+    """What every pass needs to know: the source, the clip plan, the text variables."""
     src = probe(src_path)
     seek, span, speed, dur = plan(fmt, src)
     loop = fmt["clip"]["loop"]
@@ -495,48 +580,122 @@ def build(fmt, src_path, out_path, work, caption="", when_=None):
         span = span / 2 if fmt["clip"]["mode"] != "fit" else span
         speed = speed if fmt["clip"]["mode"] != "fit" else speed * 2
     when_ = when_ or src["made"] or datetime.datetime.now().astimezone()
-    ctx = Ctx(work, dur, variables(caption, when_, fmt, speed))
+    return {"src": src, "seek": seek, "span": span, "speed": speed, "dur": dur, "part": part, "loop": loop,
+            "vars": variables(caption, when_, fmt, speed)}
 
-    ctx.add([f"setpts=(PTS-STARTPTS)/{speed:g}", f"fps={FPS}",
-             f"trim=duration={part:g}", "setpts=PTS-STARTPTS"])
-    if loop == "reverse":
-        ctx.add(["reverse"])
-    elif loop == "boomerang":
-        ctx.raw("[{i}]split[bf][bb];[bb]reverse[br];[bf][br]concat=n=2:v=1:a=0[{o}]")
 
-    fr = fmt["frame"]
-    if src["h"] > src["w"] and fr["turn"] != "none":
-        ctx.add(["transpose=2" if fr["turn"] == "ccw" else "transpose=1"])
-    if fr["mode"] == "fill":
-        ctx.add([f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos", f"crop={W}:{H}", "setsar=1"])
-    else:
-        ctx.raw(f"[{{i}}]split[fa][fb];[fa]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
-                f"gblur=sigma=40,eq=brightness=-0.25:saturation=0.8[fbg];"
-                f"[fb]scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos[ffg];"
-                f"[fbg][ffg]overlay=(W-w)/2:(H-h)/2,setsar=1[{{o}}]")
-
-    for kind, settings in fmt["effects"]:
+def build(fmt, info, in_path, out_path, work, effects, first=True, last=True):
+    """One ffmpeg pass. The first cuts the clip and fits the frame; the last pads and
+    trims to length and encodes for keeps; passes in between keep quality for the next."""
+    ctx = Ctx(work, info["dur"], info["vars"])
+    if first:
+        ctx.add([f"setpts=(PTS-STARTPTS)/{info['speed']:g}", f"fps={FPS}",
+                 f"trim=duration={info['part']:g}", "setpts=PTS-STARTPTS"])
+        if info["loop"] == "reverse":
+            ctx.add(["reverse"])
+        elif info["loop"] == "boomerang":
+            ctx.raw("[{i}]split[bf][bb];[bb]reverse[br];[bf][br]concat=n=2:v=1:a=0[{o}]")
+        fr, src = fmt["frame"], info["src"]
+        if src["h"] > src["w"] and fr["turn"] != "none":
+            ctx.add(["transpose=2" if fr["turn"] == "ccw" else "transpose=1"])
+        if fr["mode"] == "fill":
+            ctx.add([f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos", f"crop={W}:{H}", "setsar=1"])
+        else:
+            ctx.raw(f"[{{i}}]split[fa][fb];[fa]scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+                    f"gblur=sigma=40,eq=brightness=-0.25:saturation=0.8[fbg];"
+                    f"[fb]scale={W}:{H}:force_original_aspect_ratio=decrease:flags=lanczos[ffg];"
+                    f"[fbg][ffg]overlay=(W-w)/2:(H-h)/2,setsar=1[{{o}}]")
+    for kind, settings in effects:
         ctx.add(EFFECTS[kind][1](settings, ctx))
-    # Hold the last frame if the source ran short, then cut to length.
-    ctx.add([f"tpad=stop_mode=clone:stop_duration={dur:g}", f"trim=duration={dur:g}", "format=yuv420p"])
+    if last:   # hold the last frame if the source ran short, then cut to length
+        ctx.add([f"tpad=stop_mode=clone:stop_duration={info['dur']:g}", f"trim=duration={info['dur']:g}"])
+    ctx.add(["format=yuv420p"])
     ctx.flush()
 
-    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-nostdin", "-ss", f"{seek:.3f}", "-t", f"{span + 0.5:.3f}",
-           "-i", os.path.abspath(src_path)]
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-nostdin"]
+    if first:
+        cmd += ["-ss", f"{info['seek']:.3f}", "-t", f"{info['span'] + 0.5:.3f}"]
+    cmd += ["-i", os.path.abspath(in_path)]
     for f in ctx.inputs:
         cmd += ["-i", f]
-    cmd += ["-filter_complex", ";".join(ctx.graph), "-map", f"[{ctx.label}]", "-an",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-g", "15", "-r", str(FPS),
-            "-movflags", "+faststart", os.path.abspath(out_path)]
-    return cmd
+    cmd += ["-filter_complex", ";".join(ctx.graph), "-map", f"[{ctx.label}]", "-an", "-c:v", "libx264"]
+    cmd += (["-preset", "medium", "-crf", "16", "-g", "15", "-r", str(FPS), "-movflags", "+faststart"] if last
+            else ["-preset", "veryfast", "-crf", "12", "-r", str(FPS)])
+    return cmd + [os.path.abspath(out_path)]
+
+
+def ar_python():
+    """The Python for ar.py: AR_PYTHON (environment or settings.conf), else .venv, else this one."""
+    p = os.environ.get("AR_PYTHON")
+    if not p:
+        try:
+            import repo
+            p = repo.conf().get("AR_PYTHON", "")
+        except Exception:                       # render.py used alone, without settings
+            p = ""
+    here = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "bin", "python")
+    return os.path.expanduser(p) if p else (here if os.path.exists(here) else sys.executable)
+
+
+def frame_pass(info, in_path, out_path, work, effects, n):
+    """Effects that look at the picture (ar.py), in AR_PYTHON."""
+    ctx = Ctx(work, info["dur"], info["vars"])
+    ctx.n = 1000 * (n + 1)                      # staged names never clash with an ffmpeg pass
+    out = []
+    for kind, s in effects:
+        s = dict(s)
+        if kind in ("pin", "speech"):
+            text = fill_in(s["text"], info["vars"])
+            s["text"] = text.upper() if s.pop("uppercase") else text
+            s["font"] = ctx.font(s["font"])
+        if kind == "background":
+            s["files"] = [ctx.stage(f, "bg") for f in s["files"]]
+            if s.pop("choose") == "random":
+                s["seed"] = secrets.randbelow(1 << 30)
+        out.append({"kind": kind, "settings": s})
+    spec = {"input": os.path.abspath(in_path), "output": os.path.abspath(out_path), "work": work,
+            "width": W, "height": H, "fps": FPS, "duration": info["dur"], "effects": out}
+    path = os.path.join(work, f"ar{n}.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(spec, fh, ensure_ascii=False)
+    here = os.path.dirname(os.path.abspath(__file__))
+    r = subprocess.run([ar_python(), os.path.join(here, "ar.py"), path], cwd=work, capture_output=True, text=True,
+                       timeout=900)
+    if r.returncode:
+        tail = r.stderr.strip()[-600:]
+        if "No module named" in tail:
+            tail += "\n(the AR effects need numpy, opencv and onnxruntime: bin/setup-ar.sh)"
+        raise RuntimeError(f"ar.py failed: {tail}")
 
 
 def render(fmt, src_path, out_path, caption="", when_=None):
+    """ffmpeg passes and frame passes in the order the effects come, the first and last
+    always ffmpeg (they cut, fit, pad and encode)."""
+    runs = []
+    for kind, settings in fmt["effects"]:
+        is_frame = kind in FRAME_EFFECTS
+        if runs and runs[-1][0] == is_frame:
+            runs[-1][1].append((kind, settings))
+        else:
+            runs.append((is_frame, [(kind, settings)]))
+    if not runs or runs[0][0]:
+        runs.insert(0, (False, []))
+    if runs[-1][0]:
+        runs.append((False, []))
     with tempfile.TemporaryDirectory(prefix="setlog-remix-") as work:
-        cmd = build(fmt, src_path, out_path, work, caption, when_)
-        r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=600)
-        if r.returncode:
-            raise RuntimeError(f"ffmpeg failed: {r.stderr.strip()[-600:]}\n{' '.join(cmd)}")
+        info = prepare(fmt, src_path, caption, when_)
+        cur = src_path
+        for i, (is_frame, effects) in enumerate(runs):
+            last = i == len(runs) - 1
+            nxt = out_path if last else os.path.join(work, f"pass{i}.mp4")
+            if is_frame:
+                frame_pass(info, cur, nxt, work, effects, i)
+            else:
+                cmd = build(fmt, info, cur, nxt, work, effects, first=i == 0, last=last)
+                r = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=600)
+                if r.returncode:
+                    raise RuntimeError(f"ffmpeg failed: {r.stderr.strip()[-600:]}\n{' '.join(cmd)}")
+            cur = nxt
 
 
 def sheet(video, out_png, n=4):
