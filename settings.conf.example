@@ -2,6 +2,7 @@
 DEFAULT_REPO=horiyu/setlog-formats   # formats repository when the Shortcut names none (owner/name[@ref])
 ALLOWED_REPOS=             # space-separated owner/name or owner/*; empty = any repository
 GITHUB_TOKEN=              # for private repositories / more API calls; empty = try `gh auth token`
+AR_PYTHON=                 # Python for the AR effects (empty = .venv from bin/setup-ar.sh)
 SETLOG_POST=~/dev/setlog-post/setlog-post   # the setlog-post command, which does the posting
 PORT=8091                  # local port the receiver listens on (tailscale serve fronts it)
 HTTPS_PORT=8451            # tailnet port for `tailscale serve` (bin/install-service.sh)
