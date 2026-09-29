@@ -13,6 +13,7 @@ echo "PC"
 check "ffmpeg" "sudo apt install ffmpeg" command -v ffmpeg
 check "Python: Pillow" "sudo apt install python3-pil" python3 -c "import PIL"
 check "a Japanese font" "sudo apt install fonts-noto-cjk" sh -c "fc-match -f '%{file}' 'Noto Sans CJK JP' | grep -qi noto"
+check "AR effects (bin/setup-ar.sh)" "bin/setup-ar.sh" sh -c "ls cache/models/matte-*.onnx cache/models/depth-*.onnx && \"\$(python3 -c 'import render; print(render.ar_python())')\" -c 'import cv2, onnxruntime, numpy'"
 check "formats repository reachable" "check DEFAULT_REPO / GITHUB_TOKEN in settings.conf" python3 repo.py "${DEFAULT_REPO:-horiyu/setlog-formats}"
 echo "Posting (setlog-post)"
 check "setlog-post at $SETLOG_POST" "clone https://github.com/horiyu/setlog-post and set SETLOG_POST in settings.conf" test -x "$SETLOG_POST"

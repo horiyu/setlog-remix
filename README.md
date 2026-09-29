@@ -52,6 +52,7 @@ iPhone ─ビデオを撮影─▶ GET /formats?repo=owner/name ─▶ 一覧か
 | `server.py` | 受け口。systemd のソケット起動で必要なときだけ立ち上がり、無通信が続くと終わる（常駐しない） |
 | `repo.py` | GitHub からリポジトリを取ってくる（コミット単位で `cache/` に、直近 3 つ）。フォーマットの一覧 |
 | `render.py` | format.json を読んで ffmpeg で描く。`check` / `render` / `sheet` はフォーマット作者の手元確認用 |
+| `ar.py` | 絵を見て描くエフェクト（粒子・貼り付け・吹き出し・オーラ・背景・グリッチ・ネオン・残像）。`render.py` が ffmpeg の段のあいだに挟んで呼ぶ |
 | `worker.sh` | キューを1件ずつ描き、`setlog-post post` に渡す |
 | `bin/` | 受け口の導入（`install-service.sh`）、点検（`doctor.sh`） |
 | `systemd/` | ユーザー単位の systemd ユニットの雛形（`bin/install-service.sh` が入れる） |
@@ -64,6 +65,9 @@ Log は出来上がりの 0 秒目から始まり、2 秒ちょっと残る。
 - [setlog-post](https://github.com/horiyu/setlog-post) がセットアップ済みで、送り先のルームが登録してあること
   （エミュレータ・ログイン・ルームはそちら）
 - Python 3.10 以上と Pillow、`ffmpeg`、日本語フォント: `sudo apt install python3-pil ffmpeg fonts-noto-cjk`
+- AR のエフェクトを使うなら `bin/setup-ar.sh`（`.venv` に numpy・OpenCV・onnxruntime を入れ、小さなモデル2つを
+  `cache/models` に取ってくる）。**GPU は要らない**。人の切り抜き（MODNet、約25MB）と奥行き（Depth Anything V2
+  Small の量子化版、約27MB）を CPU で、縮小した絵に対して回すので、普通のノート PC でも 3 秒の動画が 30 秒ほどで描ける
 - Tailscale（PC と iPhone が同じ tailnet）
 - private なフォーマット集を使うなら GitHub のトークン（`settings.conf` の `GITHUB_TOKEN`、なければ `gh auth token` を試す）
 
@@ -73,7 +77,8 @@ Log は出来上がりの 0 秒目から始まり、2 秒ちょっと残る。
    `DEFAULT_REPO` にいつものフォーマット集。setlog-post が `~/dev/setlog-post` 以外にあるなら `SETLOG_POST`。
 2. 受け口を入れる: `bin/install-service.sh`。合言葉（`state/token`）を作り、systemd のソケットと
    `tailscale serve --https=8451` を設定して、ショートカットに書く URL と合言葉を表示する。
-3. `bin/doctor.sh` で全部そろったか確かめる。
+3. AR のエフェクトを使うなら `bin/setup-ar.sh`。
+4. `bin/doctor.sh` で全部そろったか確かめる。
 
 ## iOS ショートカット
 
