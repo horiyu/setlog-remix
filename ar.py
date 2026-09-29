@@ -401,6 +401,8 @@ class Pin:
         if not s["auto"]:
             return np.array([s["x"] * ctx.w, s["y"] * ctx.h], np.float32)
         m = ctx.scene.matte()
+        if (m > 0.5).mean() < 0.02:                          # nobody in the way: put it in plain sight
+            return np.array([0.5 * ctx.w, 0.62 * ctx.h], np.float32)
         ch, cw = self.card.shape[:2]
         best = None
         for fx, fy in ((0.24, 0.62), (0.76, 0.62), (0.26, 0.42), (0.74, 0.42), (0.5, 0.72), (0.5, 0.35)):
@@ -613,6 +615,8 @@ class Neon:
         g = cv2.cvtColor((half * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY)
         g = cv2.GaussianBlur(cv2.bilateralFilter(g, 9, 60, 9), (0, 0), 1.6)
         e = cv2.Canny(g, 60, 150)
+        if (e > 0).mean() < 0.015:                           # a plain subject: take fainter outlines too
+            e = cv2.Canny(g, 15, 45)
         if s["thickness"] > 1:
             e = cv2.dilate(e, np.ones((int(s["thickness"]), int(s["thickness"])), np.uint8))
         e = cv2.resize(e.astype(np.float32) / 255, (ctx.w, ctx.h), interpolation=cv2.INTER_LINEAR)
