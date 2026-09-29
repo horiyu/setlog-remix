@@ -396,9 +396,12 @@ def r_particles(p, _):
     kind = p.choice("kind", "snow", ("snow", "petals", "bubbles", "confetti"))
     count, size, speed = {"snow": (160, 0.012, 0.35), "petals": (70, 0.018, 0.3),
                           "bubbles": (36, 0.04, 0.25), "confetti": (140, 0.011, 0.6)}[kind]
-    return {"kind": kind, "count": p.num("count", count, 1, 400), "size": p.num("size", size, 0.002, 0.1),
+    return {"kind": kind, "count": p.num("count", count, 1, 900), "size": p.num("size", size, 0.002, 0.1),
             "speed": p.num("speed", speed, 0, 3), "wind": p.num("wind", 0.03, -1, 1),
-            "opacity": p.num("opacity", 0.9, 0, 1), "depth": p.flag("depth", True), "seed": p.num("seed", 1, 0, 1e6)}
+            "opacity": p.num("opacity", 0.9, 0, 1), "depth": p.flag("depth", kind != "confetti"),
+            "seed": p.num("seed", 1, 0, 1e6),
+            "bursts": p.num("bursts", 1, 1, 4) if kind == "confetti" else 1,       # confetti cannons, see ar.py
+            "glitter": p.num("glitter", 0.2, 0, 1) if kind == "confetti" else 0}
 
 
 def r_card(p, fmt, size):

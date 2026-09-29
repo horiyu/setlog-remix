@@ -242,17 +242,36 @@ class Particles:
         self.hue = rng.uniform(0, 1, n).astype(np.float32)
         kind = s["kind"]
         sp = s["speed"] * H
+        self.born = np.zeros(n, np.float32)
+        self.glitter = np.zeros(n, bool)
         if kind == "confetti":
-            # a burst from low in the frame, then fluttering down
-            ox, oy = W * 0.5, H * 1.02
-            self.z[:] = rng.uniform(0.55, 1.0, n)                  # a burst in front of everything
-            self.x[:] = ox + rng.normal(0, W * 0.05, n)
-            self.y[:] = oy + rng.normal(0, H * 0.02, n)
-            ang = rng.uniform(-math.pi * 0.85, -math.pi * 0.15, n)
-            v = rng.uniform(1.0, 2.2, n) * sp * 2.0
-            self.vx, self.vy = (np.cos(ang) * v).astype(np.float32), (np.sin(ang) * v).astype(np.float32)
-            palette = [(1, .25, .35), (1, .8, .15), (.2, .75, 1), (.35, .9, .45), (1, 1, 1), (.85, .4, 1)]
+            # cannons low in the frame fire at their times; the pieces flutter down after
+            # (time, x, y, aim in degrees, spread in degrees)
+            layouts = {1: [(0.0, 0.5, 1.02, -90, 55)],
+                       2: [(0.0, 0.03, 1.02, -62, 22), (0.0, 0.97, 1.02, -118, 22)],
+                       3: [(0.0, 0.03, 1.02, -62, 22), (0.0, 0.97, 1.02, -118, 22), (0.55, 0.5, 1.02, -90, 40)],
+                       4: [(0.0, 0.03, 1.02, -62, 22), (0.0, 0.97, 1.02, -118, 22), (0.5, 0.5, 1.02, -90, 40),
+                           (1.0, 0.2, 1.02, -75, 25), (1.0, 0.8, 1.02, -105, 25)]}
+            cannons = layouts[int(s["bursts"])]
+            which = rng.integers(0, len(cannons), n)
+            self.z[:] = rng.uniform(0.5, 1.0, n)                    # in front of the scene
+            v = rng.uniform(1.1, 2.6, n) * sp * 2.2
+            self.vx, self.vy = np.zeros(n, np.float32), np.zeros(n, np.float32)
+            for k, (bt, bx, by, aim, spread) in enumerate(cannons):
+                sel = which == k
+                m = int(sel.sum())
+                ang = np.radians(aim + rng.normal(0, spread / 2, m))
+                self.born[sel] = bt + rng.uniform(0, 0.08, m)
+                self.x[sel] = W * bx + rng.normal(0, W * 0.015, m)
+                self.y[sel] = H * by + rng.normal(0, H * 0.015, m)
+                self.vx[sel] = np.cos(ang) * v[sel]
+                self.vy[sel] = np.sin(ang) * v[sel]
+            palette = [(1, .22, .35), (1, .78, .1), (.15, .7, 1), (.3, .9, .4), (1, 1, 1), (.85, .35, 1), (1, .5, .1)]
             self.color = np.array([palette[i] for i in rng.integers(0, len(palette), n)], np.float32)
+            # a share of the pieces are glitter: small, gold or silver, twinkling
+            self.glitter = rng.random(n) < s["glitter"]
+            metal = np.array([(1, .85, .4), (.9, .92, 1)], np.float32)
+            self.color[self.glitter] = metal[rng.integers(0, 2, int(self.glitter.sum()))]
         else:
             self.vx = np.zeros(n, np.float32)
             self.vy = np.zeros(n, np.float32)
@@ -306,12 +325,14 @@ class Particles:
         sp = s["speed"] * H
         wind = s["wind"] * H
         if kind == "confetti":
-            self.vy += 1.1 * sp * dt
-            self.vx *= (1 - 1.6 * dt)
-            self.vy *= (1 - 1.6 * dt)
-            self.vy = np.minimum(self.vy, sp * 0.35 * (0.4 + z))
-            self.x += (self.vx + np.sin(self.phase + t * 5) * sp * 0.15 + wind) * dt
-            self.y += self.vy * dt
+            live = (t >= self.born).astype(np.float32)
+            d = dt * live
+            self.vy += 1.1 * sp * d
+            self.vx *= (1 - 1.5 * d)
+            self.vy *= (1 - 1.5 * d)
+            self.vy = np.where(live > 0, np.minimum(self.vy, sp * 0.35 * (0.4 + z)), self.vy)
+            self.x += (self.vx + np.sin(self.phase + t * 5) * sp * 0.15 + wind) * d
+            self.y += self.vy * d
         else:
             fall = {"snow": 0.35, "petals": 0.28, "bubbles": -0.22}[kind]
             sway = {"snow": 0.06, "petals": 0.16, "bubbles": 0.08}[kind]
@@ -324,7 +345,9 @@ class Particles:
         base = s["size"] * H
         order = np.argsort(z)                                   # far first
         for i in order:
-            r = base * (0.25 + 1.35 * z[i] ** 1.5)
+            if t < self.born[i]:
+                continue
+            r = base * (0.25 + 1.35 * z[i] ** 1.5) * (0.45 if self.glitter[i] else 1.0)
             col, a = self.sprite(i, r, t)
             if kind in ("snow", "petals") and z[i] > 0.82:      # too close to focus on
                 k = int(r * (z[i] - 0.82) * 1.2) * 2 + 1
@@ -341,6 +364,11 @@ class Particles:
                 full = np.zeros_like(a)
                 full[ys.start - y0:ys.stop - y0, xs.start - x0:xs.stop - x0] = occ
                 a = a * full
+            if col is None and kind == "confetti":
+                # the piece catches the light as it turns: brighter face-on, a white glint at the peak
+                flip = abs(math.cos(self.phase[i] + t * (4 + self.spin[i])))
+                shine = 0.55 + 0.7 * flip + (0.9 if self.glitter[i] and flip > 0.8 else 0.0)
+                col = np.broadcast_to(np.minimum(1, self.color[i] * shine + (flip > 0.94) * 0.35), a.shape + (3,))
             color = col if col is not None else np.broadcast_to(self.color[i], a.shape + (3,))
             paste(frame, color, a, x0, y0, "screen" if kind == "bubbles" else "over")
         return frame
