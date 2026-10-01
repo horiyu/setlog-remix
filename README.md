@@ -1,5 +1,7 @@
 # setlog-remix
 
+<p align="center"><img src="docs/vhs.gif" width="400" alt="VHS フォーマットで仕上げた動画"></p>
+
 iOS のショートカットで動画を撮り、GitHub に置いた**フォーマット**（エフェクトと編集の型）で仕上げて
 [setlog](https://setlog.kr/) に送る。
 
