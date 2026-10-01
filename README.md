@@ -35,6 +35,10 @@ iPhone ─ビデオを撮影─▶ GET /formats?repo=owner/name ─▶ 一覧か
 
 ## フォーマット
 
+同じ動画を全フォーマットで仕上げたもの（1.2 秒ずつ）。左上から順に VHS・シネマ・モノクロ・タイムラプス・ブーメラン・ドット・雪・花吹雪・シャボン玉・紙吹雪・置き手紙・吹き出し・オーラ・異世界・残像・グリッチ・サーマル・ネオン。
+
+<p align="center"><img src="docs/all-formats.gif" width="480" alt="全フォーマットの出力をつなげたもの"></p>
+
 書き方は [horiyu/setlog-formats の README](https://github.com/horiyu/setlog-formats#フォーマットの作り方) が正。
 `formats/<id>/format.json` に、使う秒数（`clip`）、枠への収め方（`frame`）、エフェクトの列（`effects`）を書く。
 
