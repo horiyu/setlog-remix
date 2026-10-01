@@ -1,6 +1,7 @@
 # setlog-remix
 
-<p align="center"><img src="docs/vhs.gif" width="400" alt="VHS フォーマットで仕上げた動画"></p>
+<p align="center"><img src="docs/all-formats.gif" width="480" alt="全フォーマットの出力をつなげたもの"></p>
+<p align="center"><sub>同じ動画を全フォーマットで仕上げたもの（1.2 秒ずつ）。左上から順に VHS・シネマ・モノクロ・タイムラプス・ブーメラン・ドット・雪・花吹雪・シャボン玉・紙吹雪・置き手紙・吹き出し・オーラ・異世界・残像・グリッチ・サーマル・ネオン</sub></p>
 
 iOS のショートカットで動画を撮り、GitHub に置いた**フォーマット**（エフェクトと編集の型）で仕上げて
 [setlog](https://setlog.kr/) に送る。
@@ -34,10 +35,6 @@ iPhone ─ビデオを撮影─▶ GET /formats?repo=owner/name ─▶ 一覧か
 - 作者の個人的な道具で、setlog・New Chat とは無関係。無保証。
 
 ## フォーマット
-
-同じ動画を全フォーマットで仕上げたもの（1.2 秒ずつ）。左上から順に VHS・シネマ・モノクロ・タイムラプス・ブーメラン・ドット・雪・花吹雪・シャボン玉・紙吹雪・置き手紙・吹き出し・オーラ・異世界・残像・グリッチ・サーマル・ネオン。
-
-<p align="center"><img src="docs/all-formats.gif" width="480" alt="全フォーマットの出力をつなげたもの"></p>
 
 書き方は [horiyu/setlog-formats の README](https://github.com/horiyu/setlog-formats#フォーマットの作り方) が正。
 `formats/<id>/format.json` に、使う秒数（`clip`）、枠への収め方（`frame`）、エフェクトの列（`effects`）を書く。
