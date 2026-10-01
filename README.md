@@ -85,7 +85,7 @@ Log は出来上がりの 0 秒目から始まり、2 秒ちょっと残る。
 
 ## iOS ショートカット
 
-**取り込むだけで使える:** [setlog-remix_public](https://www.icloud.com/shortcuts/11b659e39b0347faab6eab8ae4ca63f9)。
+**取り込むだけで使える:** [setlog-remix_public](https://www.icloud.com/shortcuts/91856514ccfe4621b20477b013d45921)。
 実行すると、受け口の URL・合言葉・フォーマットのリポジトリ名を聞かれるので、自分の値を入れる
 （合言葉は入っていない。どれも空で配っている）。自分で組みたい人は、下の手順。
 
